@@ -19,6 +19,7 @@ package org.springframework.ai.openai.metadata;
 import java.time.Duration;
 
 import org.springframework.ai.metadata.RateLimit;
+import org.springframework.lang.Nullable;
 
 /**
  * {@link RateLimit} implementation for {@literal OpenAI}.
@@ -33,20 +34,24 @@ public class OpenAiRateLimit implements RateLimit {
 
 	private static final String RATE_LIMIT_STRING = "{ @type: %1$s, requestsLimit: %2$s, requestsRemaining: %3$s, requestsReset: %4$s, tokensLimit: %5$s; tokensRemaining: %6$s; tokensReset: %7$s }";
 
+	@Nullable
 	private final Long requestsLimit;
 
+	@Nullable
 	private final Long requestsRemaining;
 
+	@Nullable
 	private final Long tokensLimit;
 
+	@Nullable
 	private final Long tokensRemaining;
 
 	private final Duration requestsReset;
 
 	private final Duration tokensReset;
 
-	public OpenAiRateLimit(Long requestsLimit, Long requestsRemaining, Duration requestsReset, Long tokensLimit,
-			Long tokensRemaining, Duration tokensReset) {
+	public OpenAiRateLimit(@Nullable Long requestsLimit, @Nullable Long requestsRemaining, Duration requestsReset,
+						   @Nullable Long tokensLimit, @Nullable Long tokensRemaining, Duration tokensReset) {
 
 		this.requestsLimit = requestsLimit;
 		this.requestsRemaining = requestsRemaining;
@@ -57,21 +62,25 @@ public class OpenAiRateLimit implements RateLimit {
 	}
 
 	@Override
+	@Nullable
 	public Long getRequestsLimit() {
 		return this.requestsLimit;
 	}
 
 	@Override
+	@Nullable
 	public Long getTokensLimit() {
 		return this.tokensLimit;
 	}
 
 	@Override
+	@Nullable
 	public Long getRequestsRemaining() {
 		return this.requestsRemaining;
 	}
 
 	@Override
+	@Nullable
 	public Long getTokensRemaining() {
 		return this.tokensRemaining;
 	}
