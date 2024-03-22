@@ -89,19 +89,23 @@ public class AccessibleChatCompletions {
 
 		if (right.choices == null) {
 			instance.choices = left.choices;
-		} else {
+		}
+		else {
 			if (left.choices == null || left.choices.isEmpty()) {
 				instance.choices = right.choices;
-			} else {
+			}
+			else {
 				instance.choices = List.of(AccessibleChatChoice.merge(left.choices.get(0), right.choices.get(0)));
 			}
 		}
 
-		//For these properties if right contains that use it!
+		// For these properties if right contains that use it!
 		instance.usage = right.usage == null ? left.usage : right.usage;
 		instance.createdAt = left.createdAt.isAfter(right.createdAt) ? left.createdAt : right.createdAt;
-		instance.promptFilterResults = right.promptFilterResults == null ? left.promptFilterResults : right.promptFilterResults;
+		instance.promptFilterResults = right.promptFilterResults == null ? left.promptFilterResults
+				: right.promptFilterResults;
 		instance.systemFingerprint = right.systemFingerprint == null ? left.systemFingerprint : right.systemFingerprint;
 		return instance;
 	}
+
 }

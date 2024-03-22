@@ -33,32 +33,38 @@ public class AccessibleChatResponseMessage {
 		final var mapped = new AccessibleChatResponseMessage();
 		mapped.role = message.getRole();
 		mapped.content = message.getContent();
-		mapped.toolCalls = Optional.ofNullable(message.getToolCalls()).map(tool -> tool.stream().map(AccessibleChatCompletionsToolCall::from).toList()).orElse(null);
+		mapped.toolCalls = Optional.ofNullable(message.getToolCalls())
+			.map(tool -> tool.stream().map(AccessibleChatCompletionsToolCall::from).toList())
+			.orElse(null);
 		mapped.functionCall = AccessibleFunctionCall.from(message.getFunctionCall());
 		mapped.context = message.getContext();
 		return mapped;
 	}
 
-	public static AccessibleChatResponseMessage merge(AccessibleChatResponseMessage left, AccessibleChatResponseMessage right) {
+	public static AccessibleChatResponseMessage merge(AccessibleChatResponseMessage left,
+			AccessibleChatResponseMessage right) {
 		final var instance = new AccessibleChatResponseMessage();
 		instance.role = left.role != null ? left.role : right.role;
 		if (left.content != null && right.content != null) {
 			instance.content = left.content.concat(right.content);
-		} else if (left.content == null) {
+		}
+		else if (left.content == null) {
 			instance.content = right.content;
-		} else {
+		}
+		else {
 			instance.content = left.content;
 		}
-
 
 		instance.toolCalls = new ArrayList<>();
 		if (left.toolCalls == null) {
 			if (right.toolCalls != null) {
 				instance.toolCalls.addAll(right.toolCalls);
 			}
-		} else if (right.toolCalls == null) {
+		}
+		else if (right.toolCalls == null) {
 			instance.toolCalls.addAll(left.toolCalls);
-		} else {
+		}
+		else {
 			instance.toolCalls.addAll(left.toolCalls);
 			final var lastToolIndex = instance.toolCalls.size() - 1;
 			var lastTool = instance.toolCalls.get(lastToolIndex);
@@ -66,14 +72,16 @@ public class AccessibleChatResponseMessage {
 				lastTool = AccessibleChatCompletionsToolCall.merge(lastTool, right.toolCalls.get(0));
 				instance.toolCalls.remove(lastToolIndex);
 				instance.toolCalls.add(lastTool);
-			} else {
+			}
+			else {
 				instance.toolCalls.add(right.toolCalls.get(0));
 			}
 		}
 
 		if (left.functionCall == null) {
 			instance.functionCall = right.functionCall;
-		} else {
+		}
+		else {
 			instance.functionCall = AccessibleFunctionCall.merge(left.functionCall, right.functionCall);
 		}
 		instance.context = left.context != null ? left.context : right.context;
