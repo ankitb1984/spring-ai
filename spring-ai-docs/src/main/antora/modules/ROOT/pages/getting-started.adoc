@@ -158,6 +158,13 @@ Each of the following sections in the documentation shows which dependencies you
 ** xref:api/image/openai-image.adoc[OpenAI Image Generation]
 ** xref:api/image/stabilityai-image.adoc[StabilityAI Image Generation]
 
+=== Audio Models
+
+* xref:api/audio/transcriptions.adoc[Transcription Models]
+** xref:api/audio/transcriptions/openai-transcriptions.adoc[OpenAI Transcriptions]
+* xref:api/audio/speech.adoc[Text-To-Speech (TTS) Models]
+** xref:api/audio/speech/openai-speech.adoc[OpenAI Text-To-Speech]
+
 === Vector Databases
 * xref:api/vectordbs.adoc[Vector Database API]
 ** xref:api/vectordbs/azure.adoc[ Azure Vector Search] - The https://learn.microsoft.com/en-us/azure/search/vector-search-overview[Azure] vector store.

@@ -13,20 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.ai.chat.prompt;
+package org.springframework.ai.autoconfigure.vectorstore.elasticsearch;
 
-import org.springframework.ai.chat.messages.Media;
-import org.springframework.ai.chat.messages.Message;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.List;
-import java.util.Map;
+/**
+ * @author Eddú Meléndez
+ * @since 1.0.0
+ */
+@ConfigurationProperties(prefix = "spring.ai.vectorstore.elasticsearch")
+public class ElasticsearchVectorStoreProperties {
 
-public interface PromptTemplateMessageActions {
+	private String indexName;
 
-	Message createMessage();
+	public String getIndexName() {
+		return this.indexName;
+	}
 
-	Message createMessage(List<Media> mediaList);
-
-	Message createMessage(Map<String, Object> model);
+	public void setIndexName(String indexName) {
+		this.indexName = indexName;
+	}
 
 }
