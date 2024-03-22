@@ -146,32 +146,16 @@ public class AzureOpenAiChatClient
 				.getChatCompletionsStream(options.getModel(), options);
 
 		final var isFunctionCall = new AtomicBoolean(false);
-		final var functionId = new AtomicReference<String>();
-		final var accessibleChatCompletionsFlux = Flux.fromStream(chatCompletionsStream.stream())
+		return Flux.fromStream(chatCompletionsStream.stream())
 				// Note: the first chat completions can be ignored when using Azure OpenAI
 				// service which is a known service bug.
 				.skip(1)
 				.map(chatCompletions -> {
 					final var toolCalls = chatCompletions.getChoices().get(0).getDelta().getToolCalls();
-//					if (toolCalls != null && !toolCalls.isEmpty()) {
-//						if (toolCalls.get(0).id != null) {
-//							functionId.set(toolCalls.get(0).id);
-//						}
-//					}
 					isFunctionCall.set(toolCalls != null && !toolCalls.isEmpty());
 					return chatCompletions;
 				})
 				.windowUntil(chatCompletions -> {
-//					final var toolCalls = chatCompletions.getChoices().get(0).getDelta().getToolCalls();
-//					if (toolCalls != null && !toolCalls.isEmpty()) {
-//						final var currentFunctionId = toolCalls.get(0).id;
-//						if (currentFunctionId != null) {
-//							var needSplit = !Objects.equals(functionId.get(), currentFunctionId);
-//							functionId.set(currentFunctionId);
-//							return needSplit;
-//						}
-//					}
-
 					if (isFunctionCall.get() && chatCompletions.getChoices()
 							.get(0)
 							.getFinishReason() == CompletionsFinishReason.TOOL_CALLS
@@ -185,9 +169,7 @@ public class AzureOpenAiChatClient
 					final var reduce = window.reduce(AccessibleChatCompletions.empty(), AccessibleChatCompletions::merge);
 					return List.of(reduce);
 				})
-				.flatMap(mono -> mono);
-
-		final var map = accessibleChatCompletionsFlux
+				.flatMap(mono -> mono)
 				.flatMapIterable(accessibleChatCompletions -> {
 					var acc = handleFunctionCallOrReturn(options, accessibleChatCompletions);
 
@@ -199,8 +181,6 @@ public class AzureOpenAiChatClient
 							})
 							.toList();
 				});
-
-		return map;
 	}
 
 	/**
