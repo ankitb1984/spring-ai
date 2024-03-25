@@ -63,6 +63,7 @@ The prefix `spring.ai.retry` is used as the property prefix that lets you config
 | spring.ai.retry.backoff.max-interval | Maximum backoff duration. |  3 min.
 | spring.ai.retry.on-client-errors | If false, throw a NonTransientAiException, and do not attempt retry for `4xx` client error codes | false
 | spring.ai.retry.exclude-on-http-codes | List of HTTP status codes that should not trigger a retry (e.g. to throw NonTransientAiException). | empty
+| spring.ai.retry.on-http-codes | List of HTTP status codes that should trigger a retry (e.g. to throw TransientAiException). | empty
 |====
 
 ==== Connection Properties
@@ -265,13 +266,13 @@ Next, create a `OpenAiChatClient` and use it for text generations:
 [source,java]
 ----
 var openAiApi = new OpenAiApi(System.getenv("OPENAI_API_KEY"));
-
-var chatClient = new OpenAiChatClient(openAiApi)
-    .withDefaultOptions(OpenAiChatOptions.builder()
+var openAiChatOptions = OpenAiChatOptions.builder()
             .withModel("gpt-3.5-turbo")
             .withTemperature(0.4)
             .withMaxTokens(200)
-        .build());
+        .build();
+var chatClient = new OpenAiChatClient(openAiApi, openAiChatOptions)
+
 
 ChatResponse response = chatClient.call(
     new Prompt("Generate the names of 5 famous pirates."));
