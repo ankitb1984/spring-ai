@@ -1,9 +1,6 @@
 package org.springframework.ai.azure.openai;
 
-import static java.lang.String.format;
-
-import java.util.List;
-
+import com.azure.ai.openai.OpenAIClient;
 import com.azure.ai.openai.models.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -12,14 +9,16 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.ChatClient;
+import org.springframework.ai.azure.openai.metadata.AzureOpenAiImageGenerationMetadata;
+import org.springframework.ai.azure.openai.metadata.AzureOpenAiImageResponseMetadata;
 import org.springframework.ai.image.*;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import com.azure.ai.openai.OpenAIClient;
 import org.springframework.util.Assert;
+
+import java.util.List;
+
+import static java.lang.String.format;
 
 /**
  * {@link ImageClient} implementation for {@literal Microsoft Azure AI} backed by
@@ -71,10 +70,13 @@ public class AzureOpenAiImageClient implements ImageClient {
 		}
 
 		List<ImageGeneration> imageGenerations = images.getData().stream().map(entry -> {
-			return new ImageGeneration(new Image(entry.getUrl(), entry.getBase64Data()));
+			var image = new Image(entry.getUrl(), entry.getBase64Data());
+			var metadata = new AzureOpenAiImageGenerationMetadata(entry.getRevisedPrompt());
+			return new ImageGeneration(image, metadata);
 		}).toList();
 
-		return new ImageResponse(imageGenerations);
+		ImageResponseMetadata openAiImageResponseMetadata = AzureOpenAiImageResponseMetadata.from(images);
+		return new ImageResponse(imageGenerations, openAiImageResponseMetadata);
 	}
 
 	private String toPrettyJson(Object object) {

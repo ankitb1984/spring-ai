@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 import org.springframework.ai.azure.openai.AzureOpenAiChatClient;
 import org.springframework.ai.azure.openai.AzureOpenAiChatOptions;
+import org.springframework.ai.azure.openai.metadata.AzureOpenAiImageGenerationMetadata;
 import org.springframework.ai.image.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -24,6 +25,8 @@ import java.io.IOException;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(classes = AzureOpenAiImageClientIT.TestConfiguration.class)
 @EnabledIfEnvironmentVariable(named = "AZURE_OPENAI_API_KEY", matches = ".+")
@@ -51,7 +54,6 @@ public class AzureOpenAiImageClientIT {
 		ImagePrompt imagePrompt = new ImagePrompt(instructions, imageOptions);
 
 		ImageResponse imageResponse = this.imageClient.call(imagePrompt);
-
 		ImageGeneration imageGeneration = imageResponse.getResult();
 		Image image = imageGeneration.getOutput();
 
@@ -78,9 +80,13 @@ public class AzureOpenAiImageClientIT {
 
 		var generation = imageResponse.getResult();
 		Image image = generation.getOutput();
+
 		assertThat(image.getUrl()).isNotEmpty();
 		logger.info(image.getUrl());
 		assertThat(image.getB64Json()).isNull();
+
+		AzureOpenAiImageGenerationMetadata metadata = (AzureOpenAiImageGenerationMetadata) generation.getMetadata();
+		assertNotNull(metadata.getRevisedPrompt());
 	}
 
 	private static void writeFile(Image image) throws IOException {
