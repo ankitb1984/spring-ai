@@ -5,46 +5,70 @@ import static java.lang.String.format;
 import java.util.List;
 
 import com.azure.ai.openai.models.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.image.*;
+import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.azure.ai.openai.OpenAIClient;
+import org.springframework.util.Assert;
 
-@Service
+/**
+ * {@link ImageClient} implementation for {@literal Microsoft Azure AI} backed by
+ * {@link OpenAIClient}.
+ *
+ * @author Benoit Moussaud
+ * @see ImageClient
+ * @see com.azure.ai.openai.OpenAIClient
+ */
 public class AzureOpenAiImageClient implements ImageClient {
 
-	private static final Logger logger = LoggerFactory.getLogger(AzureOpenAiImageClient.class);
+	private static final String DEFAULT_DEPLOYMENT_NAME = AzureOpenAiImageOptions.DEFAULT_IMAGE_MODEL;
+
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 
 	@Autowired
 	private final OpenAIClient openAIClient;
 
+	private final AzureOpenAiImageOptions defaultOptions;
+
 	public AzureOpenAiImageClient(OpenAIClient openAIClient) {
-		this.openAIClient = openAIClient;
+		this(openAIClient, AzureOpenAiImageOptions.builder().withDeploymentName(DEFAULT_DEPLOYMENT_NAME).build());
+	}
+
+	public AzureOpenAiImageClient(OpenAIClient microsoftOpenAiClient, AzureOpenAiImageOptions options) {
+		Assert.notNull(microsoftOpenAiClient, "com.azure.ai.openai.OpenAIClient must not be null");
+		Assert.notNull(options, "AzureOpenAiChatOptions must not be null");
+		this.openAIClient = microsoftOpenAiClient;
+		this.defaultOptions = options;
+	}
+
+	public AzureOpenAiImageOptions getDefaultOptions() {
+		return defaultOptions;
 	}
 
 	@Override
 	public ImageResponse call(ImagePrompt imagePrompt) {
-		if (imagePrompt.getInstructions().size() > 1) {
-			throw new RuntimeException(format("implementation support 1 image instruction only, found %s",
-					imagePrompt.getInstructions().size()));
-		}
-		if (imagePrompt.getInstructions().isEmpty()) {
-			throw new RuntimeException("please provide image instruction, current is empty");
+		ImageGenerationOptions imageGenerationOptions = toOpenAiImageOptions(imagePrompt);
+		String deploymentOrModelName = getDeploymentName(imagePrompt);
+		if (logger.isTraceEnabled()) {
+			logger.trace("Azure ImageGenerationOptions call {} with the following options : {} ", deploymentOrModelName,
+					toPrettyJson(imageGenerationOptions));
 		}
 
-		String instructions = imagePrompt.getInstructions().get(0).getText();
+		var images = openAIClient.getImageGenerations(deploymentOrModelName, imageGenerationOptions);
 
-		var imageOptions = imagePrompt.getOptions();
-		ImageGenerationOptions imageGenerationOptions = toOpenAiImageOptions(instructions, imageOptions);
-		var model = imageOptions.getModel();
-		if (model == null || model.isEmpty()) {
-			model = AzureOpenAiImageOptions.DEFAULT_IMAGE_MODEL;
+		if (logger.isTraceEnabled()) {
+			logger.trace("Azure ImageGenerations: {}", toPrettyJson(images));
 		}
-		logger.info("image generation with model {} and options : {} ", model, imageOptions);
-		var images = openAIClient.getImageGenerations(model, imageGenerationOptions);
 
 		List<ImageGeneration> imageGenerations = images.getData().stream().map(entry -> {
 			return new ImageGeneration(new Image(entry.getUrl(), entry.getBase64Data()));
@@ -53,8 +77,68 @@ public class AzureOpenAiImageClient implements ImageClient {
 		return new ImageResponse(imageGenerations);
 	}
 
-	private ImageGenerationOptions toOpenAiImageOptions(String prompt, ImageOptions runtimeImageOptions) {
-		ImageGenerationOptions imageGenerationOptions = new ImageGenerationOptions(prompt);
+	private String toPrettyJson(Object object) {
+		ObjectMapper objectMapper = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+			.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+			.registerModule(new JavaTimeModule());
+		try {
+			return objectMapper.writeValueAsString(object);
+		}
+		catch (JsonProcessingException e) {
+			return "JsonProcessingException:" + e + " [" + object.toString() + "]";
+		}
+	}
+
+	/**
+	 * Return the deployment-name if provided or use the model name.
+	 * @param prompt the image prompt
+	 * @return Return the deployment-name if provided or use the model name.
+	 */
+	private String getDeploymentName(ImagePrompt prompt) {
+		var runtimeImageOptions = prompt.getOptions();
+
+		if (this.defaultOptions != null) {
+			// Merge options fixed in beta7
+			// https://github.com/Azure/azure-sdk-for-java/issues/38183
+			runtimeImageOptions = ModelOptionsUtils.merge(runtimeImageOptions, this.defaultOptions,
+					AzureOpenAiImageOptions.class);
+		}
+
+		if (runtimeImageOptions != null) {
+			if (runtimeImageOptions instanceof AzureOpenAiImageOptions runtimeAzureOpenAiImageOptions) {
+				if (runtimeAzureOpenAiImageOptions.getDeploymentName() != null) {
+					return runtimeAzureOpenAiImageOptions.getDeploymentName();
+				}
+			}
+
+		}
+
+		// By default the one provided in the image prompt
+		return prompt.getOptions().getModel();
+
+	}
+
+	private ImageGenerationOptions toOpenAiImageOptions(ImagePrompt prompt) {
+
+		if (prompt.getInstructions().size() > 1) {
+			throw new RuntimeException(format("implementation support 1 image instruction only, found %s",
+					prompt.getInstructions().size()));
+		}
+		if (prompt.getInstructions().isEmpty()) {
+			throw new RuntimeException("please provide image instruction, current is empty");
+		}
+
+		var instructions = prompt.getInstructions().get(0).getText();
+		var runtimeImageOptions = prompt.getOptions();
+		ImageGenerationOptions imageGenerationOptions = new ImageGenerationOptions(instructions);
+
+		if (this.defaultOptions != null) {
+			// Merge options fixed in beta7
+			// https://github.com/Azure/azure-sdk-for-java/issues/38183
+			runtimeImageOptions = ModelOptionsUtils.merge(runtimeImageOptions, this.defaultOptions,
+					AzureOpenAiImageOptions.class);
+		}
+
 		if (runtimeImageOptions != null) {
 			// Handle portable image options
 			if (runtimeImageOptions.getN() != null) {

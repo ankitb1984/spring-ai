@@ -7,6 +7,11 @@ import org.springframework.ai.image.ImageOptions;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * The configuration information for a image generation request.
+ *
+ * @author Benoit Moussaud
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AzureOpenAiImageOptions implements ImageOptions {
 
@@ -20,10 +25,17 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 	private Integer n;
 
 	/**
-	 * The model to use for image generation. Dalle3 or dall-e-2"
+	 * The model dall-e-3 or dall-e-2 By default dall-e-3
 	 */
-	@JsonProperty("model")
+	@JsonProperty(value = "model")
 	private String model = ImageModel.DALL_E_3.value;
+
+	/**
+	 * The deployment name as defined in Azure Open AI Studio when creating a deployment
+	 * backed by an Azure OpenAI base model.
+	 */
+	@JsonProperty(value = "deployment_name")
+	private String deploymentName;
 
 	/**
 	 * The width of the generated images. Must be one of 256, 512, or 1024 for dall-e-2.
@@ -79,16 +91,17 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 		return n;
 	}
 
-	public void setN(Integer n) {
-		this.n = n;
-	}
-
+	@Override
 	public String getModel() {
 		return model;
 	}
 
 	public void setModel(String model) {
 		this.model = model;
+	}
+
+	public void setN(Integer n) {
+		this.n = n;
 	}
 
 	public Integer getWidth() {
@@ -152,6 +165,14 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 		this.style = style;
 	}
 
+	public String getDeploymentName() {
+		return deploymentName;
+	}
+
+	public void setDeploymentName(String deploymentName) {
+		this.deploymentName = deploymentName;
+	}
+
 	public static Builder builder() {
 		return new Builder();
 	}
@@ -162,7 +183,8 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 			return true;
 		if (!(o instanceof AzureOpenAiImageOptions that))
 			return false;
-		return Objects.equals(n, that.n) && Objects.equals(model, that.model) && Objects.equals(width, that.width)
+		return Objects.equals(n, that.n) && Objects.equals(model, that.model)
+				&& Objects.equals(deploymentName, that.deploymentName) && Objects.equals(width, that.width)
 				&& Objects.equals(height, that.height) && Objects.equals(quality, that.quality)
 				&& Objects.equals(responseFormat, that.responseFormat) && Objects.equals(size, that.size)
 				&& Objects.equals(style, that.style) && Objects.equals(user, that.user);
@@ -170,14 +192,15 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(n, model, width, height, quality, responseFormat, size, style, user);
+		return Objects.hash(n, model, deploymentName, width, height, quality, responseFormat, size, style, user);
 	}
 
 	@Override
 	public String toString() {
-		return "AzureOpenAiImageOptions{" + "n=" + n + ", model='" + model + '\'' + ", width=" + width + ", height="
-				+ height + ", quality='" + quality + '\'' + ", responseFormat='" + responseFormat + '\'' + ", size='"
-				+ size + '\'' + ", style='" + style + '\'' + ", user='" + user + '\'' + '}';
+		return "AzureOpenAiImageOptions{" + "n=" + n + ", model='" + model + '\'' + ", deploymentName='"
+				+ deploymentName + '\'' + ", width=" + width + ", height=" + height + ", quality='" + quality + '\''
+				+ ", responseFormat='" + responseFormat + '\'' + ", size='" + size + '\'' + ", style='" + style + '\''
+				+ ", user='" + user + '\'' + '}';
 	}
 
 	public static class Builder {
@@ -195,6 +218,11 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 
 		public Builder withModel(String model) {
 			options.setModel(model);
+			return this;
+		}
+
+		public Builder withDeploymentName(String deploymentName) {
+			options.setDeploymentName(deploymentName);
 			return this;
 		}
 
@@ -234,7 +262,7 @@ public class AzureOpenAiImageOptions implements ImageOptions {
 		/**
 		 * The latest DALL·E model released in Nov 2023.
 		 */
-		DALL_E_3("Dalle3"),
+		DALL_E_3("dall-e-3"),
 
 		/**
 		 * The previous DALL·E model released in Nov 2022. The 2nd iteration of DALL·E

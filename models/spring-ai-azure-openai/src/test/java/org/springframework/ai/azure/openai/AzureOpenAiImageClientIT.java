@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import org.springframework.ai.azure.openai.AzureOpenAiChatClient;
 import org.springframework.ai.azure.openai.AzureOpenAiChatOptions;
 import org.springframework.ai.image.*;
@@ -36,10 +37,10 @@ public class AzureOpenAiImageClientIT {
 
 	@Test
 	void imageAsBase64Test() throws IOException {
-
 		AzureOpenAiImageOptions imageOptions = AzureOpenAiImageOptions.builder()
 			.withN(1)
 			.withModel(AzureOpenAiImageOptions.ImageModel.DALL_E_3.getValue())
+			.withDeploymentName("Dalle3")
 			.withResponseFormat("b64_json")
 			.build();
 
@@ -61,7 +62,7 @@ public class AzureOpenAiImageClientIT {
 
 	@Test
 	void imageAsUrlTest() {
-		var options = ImageOptionsBuilder.builder().withHeight(1024).withWidth(1024).build();
+		var options = AzureOpenAiImageOptions.builder().withModel("Dalle3").withHeight(1024).withWidth(1024).build();
 
 		var instructions = """
 				A light cream colored mini golden doodle with a sign that contains the message "I'm on my way to BARCADE!".""";
@@ -102,6 +103,13 @@ public class AzureOpenAiImageClientIT {
 			return new OpenAIClientBuilder().credential(new AzureKeyCredential(azureOpenaiApiKey))
 				.endpoint(System.getenv("AZURE_OPENAI_ENDPOINT"))
 				.buildClient();
+		}
+
+		@Bean
+		public AzureOpenAiImageClient azureOpenAiImageClient(OpenAIClient openAIClient) {
+			return new AzureOpenAiImageClient(openAIClient,
+					AzureOpenAiImageOptions.builder().withDeploymentName("Dalle3").build());
+
 		}
 
 	}

@@ -38,6 +38,7 @@
 *** xref:api/embeddings/mistralai-embeddings.adoc[Mistral AI]
 ** xref:api/imageclient.adoc[]
 *** xref:api/image/openai-image.adoc[OpenAI]
+*** xref:api/image/azure-openai-image.adoc[Azure OpenAI]
 *** xref:api/image/stabilityai-image.adoc[Stability]
 ** xref:api/audio[Audio API]
 *** xref:api/audio/transcriptions.adoc[]
