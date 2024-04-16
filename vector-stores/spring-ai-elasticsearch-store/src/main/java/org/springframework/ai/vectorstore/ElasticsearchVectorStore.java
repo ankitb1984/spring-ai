@@ -21,6 +21,7 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
 import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
@@ -42,6 +43,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static java.lang.Math.sqrt;
+
 /**
  * @author Jemin Huh
  * @since 1.0.0
@@ -52,13 +55,17 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 	private static final String INDEX_NAME = "spring-ai-document-index";
 
-	private static final String EMBEDDING_FIELD = "embedding";
+	private static final String EMBEDDING = "embedding";
+
+	private static final String SIMILARITY_DEFAULT = "cosine";
 
 	private final EmbeddingClient embeddingClient;
 
 	private final ElasticsearchClient elasticsearchClient;
 
 	private final String index;
+
+	private String similarityFunction = SIMILARITY_DEFAULT;
 
 	private final FilterExpressionConverter filterExpressionConverter;
 
@@ -118,10 +125,10 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 			SearchResponse<Document> res = elasticsearchClient.search(
 					sr -> sr.index(this.index)
-						.minScore(searchRequest.getSimilarityThreshold())
 						.knn(knn -> knn.queryVector(vectors)
+							.similarity((float) searchRequest.getSimilarityThreshold())
 							.k(searchRequest.getTopK())
-							.field(EMBEDDING_FIELD)
+							.field(EMBEDDING)
 							.numCandidates((long) (1.5 * searchRequest.getTopK()))
 							.filter(fl -> fl.queryString(
 									qs -> qs.query(getElasticsearchQueryString(searchRequest.getFilterExpression()))))),
@@ -143,11 +150,25 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 	private Document toDocument(Hit<Document> hit) {
 		Document document = hit.source();
-		document.getMetadata().put("distance", 1 - hit.score().floatValue());
+		document.getMetadata().put("distance", calculateDistance(hit.score().floatValue()));
 		return document;
 	}
 
-	public boolean exists(String targetIndex) {
+	// more info on score/distance calculation
+	// https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html#knn-similarity-search
+	private float calculateDistance(Float score) {
+		switch (similarityFunction) {
+			case "l2_norm":
+				// the returned value of l2_norm is the opposite of the other functions
+				// (closest to zero means more accurate)
+				return (float) (sqrt((1 / score) - 1));
+			// cosine and dot_product
+			default:
+				return (2 * score) - 1;
+		}
+	}
+
+	public boolean existsIndex() {
 		try {
 			return this.elasticsearchClient.indices().exists(ex -> ex.index(this.index)).value();
 		}
@@ -157,10 +178,14 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 	}
 
 	// possible similarity functions and mapping examples:
-	//https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html
-	public CreateIndexResponse createIndexMapping(String index, TypeMapping mapping) {
+	// https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html
+	// max_inner_product is currently not supported because
+	// the distance value is not normalized and would not
+	// comply with the requirement of being between 0 and 1
+	public CreateIndexResponse createIndexMapping(TypeMapping mapping) {
 		try {
-			return this.elasticsearchClient.indices().create(cr -> cr.index(index).mappings(mapping));
+			this.similarityFunction = mapping.properties().get(EMBEDDING).denseVector().similarity();
+			return this.elasticsearchClient.indices().create(cr -> cr.index(this.index).mappings(mapping));
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
