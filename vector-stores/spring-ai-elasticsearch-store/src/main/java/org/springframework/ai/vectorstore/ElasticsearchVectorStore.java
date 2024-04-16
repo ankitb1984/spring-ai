@@ -184,11 +184,15 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 		}
 	}
 
-	// possible similarity functions and mapping examples:
-	// https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html
-	// max_inner_product is currently not supported because
-	// the distance value is not normalized and would not
-	// comply with the requirement of being between 0 and 1
+	/*
+	 * possible similarity functions and mapping examples:
+	 * https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html
+	 * max_inner_product is currently not supported because the distance value is not
+	 * normalized and would not comply with the requirement of being between 0 and 1
+	 *
+	 * the property map name must be "embedding", like the default value.
+	 *
+	 */
 	public CreateIndexResponse createIndexMapping(TypeMapping mapping) {
 		try {
 			this.similarityFunction = mapping.properties().get(EMBEDDING).denseVector().similarity();
