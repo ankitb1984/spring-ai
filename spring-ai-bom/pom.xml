@@ -124,6 +124,11 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-moonshot</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Vector Databses -->
             <dependency>
@@ -382,6 +387,12 @@
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-elasticsearch-store-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-moonshot-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
