@@ -16,14 +16,13 @@
 package org.springframework.ai.vectorstore;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
-import co.elastic.clients.json.JsonData;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.endpoints.BooleanResponse;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,11 +37,12 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.util.Assert;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static java.lang.Math.sqrt;
 
 /**
  * @author Jemin Huh
@@ -50,12 +50,13 @@ import java.util.stream.Collectors;
  */
 public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
-	// divided by 2 to get score in the range [0, 1]
-	public static final String COSINE_SIMILARITY_FUNCTION = "(cosineSimilarity(params.query_vector, 'embedding') + 1.0) / 2";
-
 	private static final Logger logger = LoggerFactory.getLogger(ElasticsearchVectorStore.class);
 
 	private static final String INDEX_NAME = "spring-ai-document-index";
+
+	private static final String EMBEDDING = "embedding";
+
+	private static final String SIMILARITY_DEFAULT = "cosine";
 
 	private final EmbeddingClient embeddingClient;
 
@@ -63,9 +64,9 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 	private final String index;
 
-	private final FilterExpressionConverter filterExpressionConverter;
+	private String similarityFunction = SIMILARITY_DEFAULT;
 
-	private String similarityFunction;
+	private final FilterExpressionConverter filterExpressionConverter;
 
 	public ElasticsearchVectorStore(RestClient restClient, EmbeddingClient embeddingClient) {
 		this(INDEX_NAME, restClient, embeddingClient);
@@ -79,14 +80,6 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 		this.embeddingClient = embeddingClient;
 		this.index = index;
 		this.filterExpressionConverter = new ElasticsearchAiSearchFilterExpressionConverter();
-		// the potential functions for vector fields at
-		// https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-script-score-query.html#vector-functions
-		this.similarityFunction = COSINE_SIMILARITY_FUNCTION;
-	}
-
-	public ElasticsearchVectorStore withSimilarityFunction(String similarityFunction) {
-		this.similarityFunction = similarityFunction;
-		return this;
 	}
 
 	@Override
@@ -123,27 +116,35 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 	@Override
 	public List<Document> similaritySearch(SearchRequest searchRequest) {
 		Assert.notNull(searchRequest, "The search request must not be null.");
-		return similaritySearch(this.embeddingClient.embed(searchRequest.getQuery()), searchRequest.getTopK(),
-				Double.valueOf(searchRequest.getSimilarityThreshold()).floatValue(),
-				searchRequest.getFilterExpression());
-	}
+		try {
+			float threshold = (float) searchRequest.getSimilarityThreshold();
+			// reverting l2_norm distance to its original value
+			if (similarityFunction.equals("l2_norm")) {
+				threshold = 1 - threshold;
+			}
+			final float finalThreshold = threshold;
+			List<Float> vectors = this.embeddingClient.embed(searchRequest.getQuery())
+				.stream()
+				.map(Double::floatValue)
+				.toList();
 
-	public List<Document> similaritySearch(List<Double> embedding, int topK, double similarityThreshold,
-			Filter.Expression filterExpression) {
-		return similaritySearch(new co.elastic.clients.elasticsearch.core.SearchRequest.Builder()
-			.query(getElasticsearchSimilarityQuery(embedding, filterExpression))
-			.size(topK)
-			.minScore(similarityThreshold)
-			.build());
-	}
+			SearchResponse<Document> res = elasticsearchClient.search(
+					sr -> sr.index(this.index)
+						.knn(knn -> knn.queryVector(vectors)
+							.similarity(finalThreshold)
+							.k(searchRequest.getTopK())
+							.field(EMBEDDING)
+							.numCandidates((long) (1.5 * searchRequest.getTopK()))
+							.filter(fl -> fl.queryString(
+									qs -> qs.query(getElasticsearchQueryString(searchRequest.getFilterExpression()))))),
+					Document.class);
 
-	private Query getElasticsearchSimilarityQuery(List<Double> embedding, Filter.Expression filterExpression) {
-		return Query.of(queryBuilder -> queryBuilder.scriptScore(scriptScoreQueryBuilder -> scriptScoreQueryBuilder
-			.query(queryBuilder2 -> queryBuilder2.queryString(queryStringQuerybuilder -> queryStringQuerybuilder
-				.query(getElasticsearchQueryString(filterExpression))))
-			.script(scriptBuilder -> scriptBuilder
-				.inline(inlineScriptBuilder -> inlineScriptBuilder.source(this.similarityFunction)
-					.params("query_vector", JsonData.of(embedding))))));
+			return res.hits().hits().stream().map(this::toDocument).collect(Collectors.toList());
+
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	private String getElasticsearchQueryString(Filter.Expression filterExpression) {
@@ -152,42 +153,50 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 	}
 
-	private List<Document> similaritySearch(co.elastic.clients.elasticsearch.core.SearchRequest searchRequest) {
-		try {
-			return this.elasticsearchClient.search(searchRequest, Document.class)
-				.hits()
-				.hits()
-				.stream()
-				.map(this::toDocument)
-				.collect(Collectors.toList());
-		}
-		catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
 	private Document toDocument(Hit<Document> hit) {
 		Document document = hit.source();
-		document.getMetadata().put("distance", 1 - hit.score().floatValue());
+		document.getMetadata().put("distance", calculateDistance(hit.score().floatValue()));
 		return document;
 	}
 
-	public boolean exists(String targetIndex) {
+	// more info on score/distance calculation
+	// https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html#knn-similarity-search
+	private float calculateDistance(Float score) {
+		switch (similarityFunction) {
+			case "l2_norm":
+				// the returned value of l2_norm is the opposite of the other functions
+				// (closest to zero means more accurate), so to make it consistent
+				// with the other functions the reverse is returned applying a "1-"
+				// to the standard transformation
+				return (float) (1 - (sqrt((1 / score) - 1)));
+			// cosine and dot_product
+			default:
+				return (2 * score) - 1;
+		}
+	}
+
+	public boolean existsIndex() {
 		try {
-			BooleanResponse response = this.elasticsearchClient.indices()
-				.exists(existRequestBuilder -> existRequestBuilder.index(targetIndex));
-			return response.value();
+			return this.elasticsearchClient.indices().exists(ex -> ex.index(this.index)).value();
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	public CreateIndexResponse createIndexMapping(String index, String mappingJson) {
+	/*
+	 * possible similarity functions and mapping examples:
+	 * https://www.elastic.co/guide/en/elasticsearch/reference/master/dense-vector.html
+	 * max_inner_product is currently not supported because the distance value is not
+	 * normalized and would not comply with the requirement of being between 0 and 1
+	 *
+	 * the property map name must be "embedding", like the default value.
+	 *
+	 */
+	public CreateIndexResponse createIndexMapping(TypeMapping mapping) {
 		try {
-			return this.elasticsearchClient.indices()
-				.create(createIndexBuilder -> createIndexBuilder.index(index)
-					.mappings(typeMappingBuilder -> typeMappingBuilder.withJson(new StringReader(mappingJson))));
+			this.similarityFunction = mapping.properties().get(EMBEDDING).denseVector().similarity();
+			return this.elasticsearchClient.indices().create(cr -> cr.index(this.index).mappings(mapping));
 		}
 		catch (IOException e) {
 			throw new RuntimeException(e);
@@ -196,20 +205,6 @@ public class ElasticsearchVectorStore implements VectorStore, InitializingBean {
 
 	@Override
 	public void afterPropertiesSet() {
-		if (!exists(this.index)) {
-			createIndexMapping(this.index, """
-					{
-					      "properties": {
-					          "embedding": {
-					              "type": "dense_vector",
-					              "dims": 1536,
-					              "index": true,
-					              "similarity": "cosine"
-					          }
-					      }
-					  }
-					""");
-		}
 	}
 
 }
