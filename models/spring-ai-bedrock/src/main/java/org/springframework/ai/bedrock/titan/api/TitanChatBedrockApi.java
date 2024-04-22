@@ -292,7 +292,7 @@ public class TitanChatBedrockApi extends
 	}
 
 	@Override
-	public TitanChatResponse chatCompletion(TitanChatRequest request) {
+	public AmazonBedrockInvocationContext<TitanChatResponse> chatCompletion(TitanChatRequest request) {
 		return this.internalInvocation(request, TitanChatResponse.class);
 	}
 
