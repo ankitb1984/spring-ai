@@ -111,7 +111,7 @@
 			<scope>test</scope>
 		</dependency>
 
-    </dependencies>
+	</dependencies>
 
 	<profiles>
 		<profile>
