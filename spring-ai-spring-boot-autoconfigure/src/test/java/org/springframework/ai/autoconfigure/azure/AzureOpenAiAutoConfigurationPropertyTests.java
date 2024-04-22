@@ -17,10 +17,8 @@ package org.springframework.ai.autoconfigure.azure;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.ai.autoconfigure.azure.openai.AzureOpenAiAutoConfiguration;
-import org.springframework.ai.autoconfigure.azure.openai.AzureOpenAiChatProperties;
-import org.springframework.ai.autoconfigure.azure.openai.AzureOpenAiConnectionProperties;
-import org.springframework.ai.autoconfigure.azure.openai.AzureOpenAiEmbeddingProperties;
+import org.springframework.ai.autoconfigure.azure.openai.*;
+import org.springframework.ai.azure.openai.AzureOpenAiImageOptions;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -31,6 +29,45 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 0.8.0
  */
 public class AzureOpenAiAutoConfigurationPropertyTests {
+
+	@Test
+	public void imagePropertiesTest() {
+
+		new ApplicationContextRunner().withPropertyValues(
+		// @formatter:off
+                        "spring.ai.azure.openai.api-key=TEST_API_KEY",
+                        "spring.ai.azure.openai.endpoint=TEST_ENDPOINT",
+						"spring.ai.azure.openai.image.options.model=IMAGE_MODEL_XYZ",
+                        "spring.ai.azure.openai.image.options.deployment-name=DEPLOYMENT_MODEL_XYZ",
+                        "spring.ai.azure.openai.image.options.width=1792",
+                        "spring.ai.azure.openai.image.options.height=1024",
+                        "spring.ai.azure.openai.image.options.n=3",
+                        "spring.ai.azure.openai.image.options.quality=hd",
+                        "spring.ai.azure.openai.image.options.response-format=b64_json",
+                        "spring.ai.azure.openai.image.options.style=vivid",
+                        "spring.ai.azure.openai.image.options.user=userXYZ"
+                )
+                // @formatter:on
+			.withConfiguration(AutoConfigurations.of(AzureOpenAiAutoConfiguration.class))
+			.run(context -> {
+				var connectionProperties = context.getBean(AzureOpenAiConnectionProperties.class);
+				assertThat(connectionProperties.getApiKey()).isEqualTo("TEST_API_KEY");
+				assertThat(connectionProperties.getEndpoint()).isEqualTo("TEST_ENDPOINT");
+
+				var imageProperties = context.getBean(AzureOpenAiImageOptionsProperties.class);
+				var options = imageProperties.getOptions();
+				assertThat(options.getModel()).isEqualTo("IMAGE_MODEL_XYZ");
+				assertThat(options.getDeploymentName()).isEqualTo("DEPLOYMENT_MODEL_XYZ");
+				assertThat(options.getWidth()).isEqualTo(1792);
+				assertThat(options.getHeight()).isEqualTo(1024);
+				assertThat(options.getSize()).isEqualTo("1792x1024");
+				assertThat(options.getN()).isEqualTo(3);
+				assertThat(options.getResponseFormat()).isEqualTo("b64_json");
+				assertThat(options.getStyle()).isEqualTo("vivid");
+				assertThat(options.getUser()).isEqualTo("userXYZ");
+
+			});
+	}
 
 	@Test
 	public void embeddingPropertiesTest() {

@@ -24,6 +24,7 @@ import com.azure.core.util.ClientOptions;
 
 import org.springframework.ai.azure.openai.AzureOpenAiChatClient;
 import org.springframework.ai.azure.openai.AzureOpenAiEmbeddingClient;
+import org.springframework.ai.azure.openai.AzureOpenAiImageClient;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -39,7 +40,7 @@ import org.springframework.util.CollectionUtils;
 @AutoConfiguration
 @ConditionalOnClass({ OpenAIClientBuilder.class, AzureOpenAiChatClient.class })
 @EnableConfigurationProperties({ AzureOpenAiChatProperties.class, AzureOpenAiEmbeddingProperties.class,
-		AzureOpenAiConnectionProperties.class })
+		AzureOpenAiConnectionProperties.class, AzureOpenAiImageOptionsProperties.class })
 public class AzureOpenAiAutoConfiguration {
 
 	@Bean
@@ -87,6 +88,15 @@ public class AzureOpenAiAutoConfiguration {
 		FunctionCallbackContext manager = new FunctionCallbackContext();
 		manager.setApplicationContext(context);
 		return manager;
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = AzureOpenAiImageOptionsProperties.CONFIG_PREFIX, name = "enabled",
+			havingValue = "true", matchIfMissing = true)
+	public AzureOpenAiImageClient azureOpenAiImageClient(OpenAIClient openAIClient,
+			AzureOpenAiImageOptionsProperties imageProperties) {
+
+		return new AzureOpenAiImageClient(openAIClient, imageProperties.getOptions());
 	}
 
 }
