@@ -26,8 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
+import com.vmware.gemfire.testcontainers.GemFireCluster;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -46,10 +52,39 @@ import org.springframework.core.io.DefaultResourceLoader;
  * @author Geet Rawat
  * @since 1.0.0
  */
-@EnabledIfEnvironmentVariable(named = "GEMFIRE_HOST", matches = ".+")
 public class GemFireVectorStoreIT {
 
 	public static final String INDEX_NAME = "spring-ai-index1";
+
+	private static GemFireCluster gemFireCluster;
+
+	private static final int HTTP_SERVICE_PORT = 9090;
+
+	private static final int LOCATOR_COUNT = 1;
+
+	private static final int SERVER_COUNT = 1;
+
+	@AfterAll
+	public static void stopGemFireCluster() {
+		gemFireCluster.close();
+	}
+
+	@BeforeAll
+	public static void startGemFireCluster() {
+		Ports.Binding hostPort = Ports.Binding.bindPort(HTTP_SERVICE_PORT);
+		ExposedPort exposedPort = new ExposedPort(HTTP_SERVICE_PORT);
+		PortBinding mappedPort = new PortBinding(hostPort, exposedPort);
+		gemFireCluster = new GemFireCluster("gemfire/gemfire-all:10.1-jdk17", LOCATOR_COUNT, SERVER_COUNT);
+		gemFireCluster.withConfiguration(GemFireCluster.SERVER_GLOB,
+				container -> container.withExposedPorts(HTTP_SERVICE_PORT)
+					.withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withPortBindings(mappedPort)));
+		gemFireCluster.withGemFireProperty(GemFireCluster.SERVER_GLOB, "http-service-port",
+				Integer.toString(HTTP_SERVICE_PORT));
+		gemFireCluster.acceptLicense().start();
+
+		System.setProperty("spring.data.gemfire.pool.locators",
+				String.format("localhost[%d]", gemFireCluster.getLocatorPort()));
+	}
 
 	List<Document> documents = List.of(
 			new Document("1", getText("classpath:/test/data/spring.ai.txt"), Map.of("meta1", "meta1")),
@@ -71,12 +106,12 @@ public class GemFireVectorStoreIT {
 
 	@BeforeEach
 	public void createIndex() {
-		contextRunner.run(c -> c.getBean(GemFireVectorStore.class).createIndex(INDEX_NAME));
+		contextRunner.run(context -> context.getBean(GemFireVectorStore.class).createIndex());
 	}
 
 	@AfterEach
 	public void deleteIndex() {
-		contextRunner.run(c -> c.getBean(GemFireVectorStore.class).deleteIndex(INDEX_NAME));
+		contextRunner.run(context -> context.getBean(GemFireVectorStore.class).deleteIndex());
 	}
 
 	@Test
@@ -85,9 +120,10 @@ public class GemFireVectorStoreIT {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			vectorStore.add(documents);
 			vectorStore.delete(documents.stream().map(doc -> doc.getId()).toList());
-			Awaitility.await().atMost(1, MINUTES).until(() -> {
-				return vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(3));
-			}, hasSize(0));
+			Awaitility.await()
+				.atMost(1, MINUTES)
+				.until(() -> vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(3)),
+						hasSize(0));
 		});
 	}
 
@@ -97,14 +133,15 @@ public class GemFireVectorStoreIT {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			vectorStore.add(documents);
 
-			Awaitility.await().atMost(1, MINUTES).until(() -> {
-				return vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
-			}, hasSize(1));
+			Awaitility.await()
+				.atMost(1, MINUTES)
+				.until(() -> vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1)),
+						hasSize(1));
 
 			List<Document> results = vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(5));
 			Document resultDoc = results.get(0);
 			assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
-			assertThat(resultDoc.getContent()).contains("The Great Depression (1929–1939) was an economic shock");
+			assertThat(resultDoc.getContent()).contains("The Great Depression (1929–1939)" + " was an economic shock");
 			assertThat(resultDoc.getMetadata()).hasSize(2);
 			assertThat(resultDoc.getMetadata()).containsKey("meta2");
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
@@ -120,9 +157,10 @@ public class GemFireVectorStoreIT {
 					Collections.singletonMap("meta1", "meta1"));
 			vectorStore.add(List.of(document));
 			SearchRequest springSearchRequest = SearchRequest.query("Spring").withTopK(5);
-			Awaitility.await().atMost(1, MINUTES).until(() -> {
-				return vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
-			}, hasSize(1));
+			Awaitility.await()
+				.atMost(1, MINUTES)
+				.until(() -> vectorStore.similaritySearch(SearchRequest.query("Great Depression").withTopK(1)),
+						hasSize(1));
 			List<Document> results = vectorStore.similaritySearch(springSearchRequest);
 			Document resultDoc = results.get(0);
 			assertThat(resultDoc.getId()).isEqualTo(document.getId());
@@ -131,7 +169,7 @@ public class GemFireVectorStoreIT {
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
 
 			Document sameIdDocument = new Document(document.getId(),
-					"The World is Big and Salvation Lurks Around the Corner",
+					"The World is Big and Salvation Lurks " + "Around the Corner",
 					Collections.singletonMap("meta2", "meta2"));
 
 			vectorStore.add(List.of(sameIdDocument));
@@ -141,7 +179,7 @@ public class GemFireVectorStoreIT {
 			assertThat(results).hasSize(1);
 			resultDoc = results.get(0);
 			assertThat(resultDoc.getId()).isEqualTo(document.getId());
-			assertThat(resultDoc.getContent()).isEqualTo("The World is Big and Salvation Lurks Around the Corner");
+			assertThat(resultDoc.getContent()).isEqualTo("The World is Big and Salvation" + " Lurks Around the Corner");
 			assertThat(resultDoc.getMetadata()).containsKey("meta2");
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
 		});
@@ -154,10 +192,11 @@ public class GemFireVectorStoreIT {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			vectorStore.add(documents);
 
-			Awaitility.await().atMost(1, MINUTES).until(() -> {
-				return vectorStore
-					.similaritySearch(SearchRequest.query("Great Depression").withTopK(5).withSimilarityThresholdAll());
-			}, hasSize(3));
+			Awaitility.await()
+				.atMost(1, MINUTES)
+				.until(() -> vectorStore
+					.similaritySearch(SearchRequest.query("Great Depression").withTopK(5).withSimilarityThresholdAll()),
+						hasSize(3));
 
 			List<Document> fullResult = vectorStore
 				.similaritySearch(SearchRequest.query("Depression").withTopK(5).withSimilarityThresholdAll());
@@ -173,7 +212,7 @@ public class GemFireVectorStoreIT {
 
 			Document resultDoc = results.get(0);
 			assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
-			assertThat(resultDoc.getContent()).contains("The Great Depression (1929–1939) was an economic shock");
+			assertThat(resultDoc.getContent()).contains("The Great Depression " + "(1929–1939) was an economic shock");
 			assertThat(resultDoc.getMetadata()).containsKey("meta2");
 			assertThat(resultDoc.getMetadata()).containsKey("distance");
 		});
@@ -185,14 +224,14 @@ public class GemFireVectorStoreIT {
 
 		@Bean
 		public GemFireVectorStoreConfig gemfireVectorStoreConfig() {
-			return GemFireVectorStoreConfig.builder().withHost("localhost").build();
+			return new GemFireVectorStoreConfig().setHost("localhost")
+				.setPort(HTTP_SERVICE_PORT)
+				.setIndexName(INDEX_NAME);
 		}
 
 		@Bean
 		public GemFireVectorStore vectorStore(GemFireVectorStoreConfig config, EmbeddingClient embeddingClient) {
-			GemFireVectorStore gemFireVectorStore = new GemFireVectorStore(config, embeddingClient);
-			gemFireVectorStore.setIndexName(INDEX_NAME);
-			return gemFireVectorStore;
+			return new GemFireVectorStore(config, embeddingClient);
 		}
 
 		@Bean

@@ -12,9 +12,23 @@ Capabilities:
 - Perform vector searches based on similarity
 
 == Prerequisites
+- Access to VMware’s commercial Maven repository in /.m2/settings.xml.
 
-Access to a GemFire cluster with the link:https://docs.vmware.com/en/VMware-GemFire-VectorDB/1.0/gemfire-vectordb/install.html[GemFire Vector Database] extension installed.
-You can download the GemFire VectorDB extension from the link:https://network.pivotal.io/products/gemfire-vectordb/[VMware Tanzu Network] after signing in.
+Add the following to the .m2/settings.xml file. Replace MY-USERNAME@example and MY-DECRYPTED-PASSWORD with your Pivotal Commercial Maven Repository credentials.
+(https://gemfire.dev/quickstart/java/).
+
+[source,java]
+----
+<settings>
+    <servers>
+        <server>
+            <id>gemfire-release-repo</id>
+            <username>MY-USERNAME@example.com</username>
+            <password>MY-DECRYPTED-PASSWORD</password>
+        </server>
+    </servers>
+</settings>
+----
 
 == Dependencies
 
@@ -41,9 +55,22 @@ Add these dependencies to your project:
 </dependency>
 ----
 
+- Auto-configuration
+
+Spring Boot auto-configuration for the GemFire Vector Store.
+To enable it, add the following dependency to your project's Maven `pom.xml` file:
+
+[source, xml]
+----
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-gemfire-store-spring-boot-starter</artifactId>
+</dependency>
+----
 
 TIP: Refer to the xref:getting-started.adoc#dependency-management[Dependency Management] section to add the Spring AI BOM to your build file.
 
+Following are the xref:#_gemfirevectorstore_properties[configuration parameters] for the vector store to learn about the default values and configuration options.
 
 == Sample Code
 
@@ -120,3 +147,19 @@ vectorStore.add(List.of(document));
 
 If all goes well, you should retrieve the document containing the text "Spring AI rocks!!".
 
+== GemFireVectorStore properties
+
+You can use the following properties in your Spring Boot configuration to customize the Neo4j vector store.
+
+|===
+|Property|Default value
+
+|`spring.ai.vectorstore.gemfire.host`|localhost
+|`spring.ai.vectorstore.gemfire.port`|8080
+|`spring.ai.vectorstore.gemfire.indexName`|spring-ai-gemfire
+|`spring.ai.vectorstore.gemfire.beamWidth`|100
+|`spring.ai.vectorstore.gemfire.maxConnections`|16
+|`spring.ai.vectorstore.gemfire.vectorSimilarityFunction`|COSINE
+|`spring.ai.vectorstore.gemfire.fields`|[]
+|`spring.ai.vectorstore.gemfire.buckets`|0
+|===
