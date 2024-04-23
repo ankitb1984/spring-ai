@@ -267,6 +267,15 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Moonshot AI  -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-moonshot-ai</artifactId>
+			<version>${project.parent.version}</version>
+			<optional>true</optional>
+		</dependency>
+
+
 		<!-- test dependencies -->
 
 		<dependency>
